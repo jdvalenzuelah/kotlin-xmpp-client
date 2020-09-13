@@ -1,6 +1,6 @@
 package chat.core.management
 
-import org.jivesoftware.smack.XMPPConnection
+import org.jivesoftware.smack.ConnectionConfiguration
 import org.jivesoftware.smack.chat2.Chat
 import org.jivesoftware.smack.chat2.ChatManager
 import org.jivesoftware.smack.chat2.IncomingChatMessageListener
@@ -19,15 +19,21 @@ fun connection(init: ConnectionBuilder.() -> Unit): XMPPTCPConnection {
 
 typealias MessageHandler = (jid: EntityBareJid, message: Message, chat: Chat) -> Unit
 
+typealias  SecurityMode = ConnectionConfiguration.SecurityMode
+
+typealias Connection = XMPPTCPConnection
+
 fun ChatManager.chatWith(user: String, handler: MessageHandler): Chat {
     val jid = JidCreate.entityBareFrom(user)
     return  chatWith(jid).also { addIncomingListener(IncomingChatMessageListener(handler)) }
 }
 
-fun chatManager(conn: XMPPConnection): ChatManager = ChatManager.getInstanceFor(conn)
-
 fun AccountManager.createAccount(user: String, password: String) {
     createAccount(Localpart.from(user), password)
 }
 
-fun accountManager(conn: XMPPConnection): AccountManager = AccountManager.getInstance(conn)
+fun withChat(conn: Connection, block: chat.core.management.Chat.() -> Unit ) {
+    val chat = Chat(conn)
+    chat.block()
+    chat.disconnect()
+}
