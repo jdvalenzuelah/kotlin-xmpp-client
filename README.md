@@ -6,4 +6,4 @@ To compile dist:
 from main folder
 ```
 ./gradlew compileKotlin distZip 
-``
+```

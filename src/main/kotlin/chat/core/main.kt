@@ -1,39 +1,29 @@
 package chat.core
 
 import chat.core.management.*
+import org.pmw.tinylog.Configurator
+import org.pmw.tinylog.Level
+
 
 fun main() {
 
+    Configurator.currentConfig()
+        .level(Level.DEBUG)
+        .activate()
+
     val conn = connection {
         config {
-            user(username = "test", password = "test")
-            domain = "jabber.hot-chilli.net"
-            host = "jabber.hot-chilli.net"
+            domain = "redes2020.xyz"
+            host = "redes2020.xyz"
+            securityMode = SecurityMode.disabled
         }
     }
 
-    conn.connect()
-    conn.login()
-    conn.disconnect()
-
-    val accountManager = accountManager(conn)
-
-    accountManager.createAccount("test", "test")
-
-    conn.connect()
-    conn.login("test", "test")
-
-    val chatManager = chatManager(conn)
-
-    val chatU = chatManager.chatWith("test") { _, msg, chat ->
-        println(msg.from)
-        println(msg.body)
-        chat.send("response")
+    withChat(conn) {
+        createAccount("test12354551111111", "test31213255")
+        login("test12354555", "test31213255")
+        getRegisteredUsers()
+        logout()
     }
-
-    chatU.send("Hello world!")
-
-    while (true)
-        continue
 
 }
