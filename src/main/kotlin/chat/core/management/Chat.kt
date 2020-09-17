@@ -1,5 +1,7 @@
 package chat.core.management
 
+import chat.core.management.models.Contact
+import chat.core.management.models.RegisteredUser
 import org.jivesoftware.smack.XMPPConnection
 import org.jivesoftware.smack.XMPPException
 import org.jivesoftware.smack.chat2.ChatManager
@@ -13,8 +15,10 @@ import org.jivesoftware.smackx.iqregister.AccountManager
 import org.jivesoftware.smackx.search.ReportedData
 import org.jivesoftware.smackx.search.UserSearchManager
 import org.jivesoftware.smackx.xdata.Form
+import org.jxmpp.jid.BareJid
 import org.jxmpp.jid.DomainBareJid
 import org.jxmpp.jid.Jid
+import org.jxmpp.jid.impl.JidCreate
 import org.jxmpp.jid.parts.Localpart
 import org.pmw.tinylog.Logger
 
@@ -87,12 +91,22 @@ class Chat(private val conn: Connection) {
         managers.accountManager.sensitiveOperationOverInsecureConnection(true)
     }
 
-    private fun senStanza(stanza: Stanza) = executeIfLoggedIn { conn.sendStanza(stanza) }
+    private fun sendStanza(stanza: Stanza) = executeIfLoggedIn { conn.sendStanza(stanza) }
 
-    private fun sendPresence(type: Presence.Type) = senStanza(Presence(type))
+    private fun sendPresence(type: Presence.Type) = sendStanza(Presence(type))
+
+    private fun sendPresence(type: Presence.Type, init: Presence.() -> Unit) {
+        val p = Presence(type)
+        p.init()
+        sendStanza(p)
+    }
 
     private fun sendPresence(type: Presence.Type, priority: Int, status: String, mode: Presence.Mode) =
-        senStanza(Presence(type, status, priority, mode))
+        sendStanza(Presence(type, status, priority, mode))
+
+    private fun subscribe(to: BareJid) = sendPresence(Presence.Type.subscribe) {
+        setTo(to)
+    }
 
     private inline fun <T> executeIf(con: Boolean, block: () -> T): T? = if(con) block() else null
 
@@ -121,13 +135,13 @@ class Chat(private val conn: Connection) {
     fun login(username: String, password: String): Boolean {
         ensureConnection()
         Logger.info("Logging in as $username")
-        val res = tryLogin {
+        tryLogin {
             conn.login(username, password)
             toggleLoggedIn()
             managers.update()
             available()
         }
-        return res != null
+        return loggedIn
     }
 
     fun available() {
@@ -151,11 +165,12 @@ class Chat(private val conn: Connection) {
     }
 
     @Throws(AccountCreationException::class)
-    fun createAccount(username: String, password: String) {
-        executeIfNotLoggedIn {
+    fun createAccount(username: String, password: String): Boolean {
+        return executeIfNotLoggedIn {
             Logger.info("Creating new account $username")
             try {
                 managers.accountManager.createAccount(Localpart.from(username), password)
+                true
             }catch (e: XMPPException.XMPPErrorException) {
                 Logger.error("Error received from server ${e.message}")
                 throw when(e.stanzaError.condition) {
@@ -164,14 +179,19 @@ class Chat(private val conn: Connection) {
                 }
             }
         }
+            ?: false
     }
 
-    fun deleteAccount() {
-        executeIfLoggedIn {
+    fun deleteAccount(): Boolean {
+        return executeIfLoggedIn {
             Logger.warn("Deleting account!")
             managers.accountManager.deleteAccount()
+            true
         }
-            ?: Logger.error("Must be logged in to delete account!")
+            ?: run {
+                Logger.error("Must be logged in to delete account!")
+                false
+            }
     }
 
 
@@ -182,19 +202,55 @@ class Chat(private val conn: Connection) {
         return  searchManager.getSearchResults(answerForm, searchService)
     }
 
-    fun getRegisteredUsers() {
-        val searchService = managers.userSearch.getSearchService()
-            ?: throw NoSearchServiceFoundException("No search service found!")
+    fun getRegisteredUsers(): List<RegisteredUser> {
+        return executeIfLoggedIn {
+            val searchService = managers.userSearch.getSearchService()
+                ?: throw NoSearchServiceFoundException("No search service found!")
 
-        val data = search(searchService, managers.userSearch) {
-            setAnswer("Username", true)
-            setAnswer("Email", true)
-            setAnswer("Name", true)
-            setAnswer("search", "*")
+            val data = search(searchService, managers.userSearch) {
+                setAnswer("Username", true)
+                setAnswer("Email", true)
+                setAnswer("Name", true)
+                setAnswer("search", "*")
+            }
+
+            data.rows.map {
+                RegisteredUser(
+                    username = it.getValues("Username").toString(),
+                    email = it.getValues("Email")?.toString(),
+                    name = it.getValues("Name")?.toString()
+                )
+            }
         }
+            ?: emptyList()
 
-        data.rows.forEach { println(it.getValues("Username") + it.getValues("Email") + it.getValues("Name")) }
+    }
 
+    fun addContact(username: String, contactName: String, autoSubscribe: Boolean = true): Boolean {
+        return executeIfLoggedIn {
+            val contactJid = JidCreate.bareFrom(username)
+            managers.roster.createEntry(contactJid, contactName, null)
+            if(autoSubscribe)
+                subscribe(contactJid)
+            true
+        }
+            ?: false
+    }
+
+    fun getContacts(): List<Contact> {
+        return executeIfLoggedIn {
+            managers.roster.entries.map {
+                Contact(it.name, it.jid)
+            }
+        }
+            ?: emptyList()
+    }
+
+    fun getContactDetails(contact: BareJid): Contact? {
+        return executeIfLoggedIn {
+            managers.roster.getEntry(contact)
+                ?.let { Contact(it.name, it.jid) }
+        }
     }
 
     fun disconnect() {
