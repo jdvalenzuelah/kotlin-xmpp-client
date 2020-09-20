@@ -4,23 +4,29 @@ import chat.core.management.models.Contact
 import chat.core.management.models.RegisteredUser
 import org.jivesoftware.smack.XMPPConnection
 import org.jivesoftware.smack.XMPPException
+import org.jivesoftware.smack.chat2.Chat
 import org.jivesoftware.smack.chat2.ChatManager
+import org.jivesoftware.smack.chat2.IncomingChatMessageListener
 import org.jivesoftware.smack.packet.Presence
 import org.jivesoftware.smack.packet.Stanza
 import org.jivesoftware.smack.packet.StanzaError
 import org.jivesoftware.smack.roster.Roster
 import org.jivesoftware.smack.roster.RosterListener
 import org.jivesoftware.smack.sasl.SASLErrorException
+import org.jivesoftware.smackx.filetransfer.FileTransferManager
 import org.jivesoftware.smackx.iqregister.AccountManager
 import org.jivesoftware.smackx.search.ReportedData
 import org.jivesoftware.smackx.search.UserSearchManager
 import org.jivesoftware.smackx.xdata.Form
 import org.jxmpp.jid.BareJid
 import org.jxmpp.jid.DomainBareJid
+import org.jxmpp.jid.EntityFullJid
 import org.jxmpp.jid.Jid
 import org.jxmpp.jid.impl.JidCreate
 import org.jxmpp.jid.parts.Localpart
+import org.jxmpp.util.XmppStringUtils
 import org.pmw.tinylog.Logger
+import java.io.File
 
 class Chat(private val conn: Connection) {
 
@@ -31,12 +37,14 @@ class Chat(private val conn: Connection) {
         var chatManager = ChatManager.getInstanceFor(conn)
         var roster = Roster.getInstanceFor(conn)
         var userSearch = UserSearchManager(conn)
+        var fileTransferManager = FileTransferManager.getInstanceFor(conn)
 
         fun update() {
             accountManager = AccountManager.getInstance(conn)
             chatManager = ChatManager.getInstanceFor(conn)
             roster = Roster.getInstanceFor(conn)
             userSearch = UserSearchManager(conn)
+            fileTransferManager = FileTransferManager.getInstanceFor(conn)
         }
     }
 
@@ -250,6 +258,13 @@ class Chat(private val conn: Connection) {
         return executeIfLoggedIn {
             managers.roster.getEntry(contact)
                 ?.let { Contact(it.name, it.jid) }
+        }
+    }
+
+    fun chatWith(user: String, handler: MessageHandler): Chat {
+        val jid = JidCreate.entityBareFrom(user)
+        return managers.chatManager.chatWith(jid).also {
+            managers.chatManager.addIncomingListener(IncomingChatMessageListener(handler))
         }
     }
 

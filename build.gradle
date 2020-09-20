@@ -31,7 +31,7 @@ dependencies {
 }
 
 application {
-    mainClassName = "game.MainKt"
+    mainClassName = "ui.MainKt"
 }
 
 compileKotlin {

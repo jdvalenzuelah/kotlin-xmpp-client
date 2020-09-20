@@ -3,6 +3,7 @@ package chat.core.management
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assertions.*
 import org.jxmpp.jid.impl.JidCreate
+import java.io.File
 import java.util.*
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -67,7 +68,9 @@ class ChatIntegTest {
     @Test
     @Order(7)
     fun `should be able to create a new chat`() {
-        TODO("Not yet implemented")
+        assertDoesNotThrow {
+            chat.chatWith("test12354555@redes2020.xyz") {_,_,_-> /* Empty handler */ }
+        }
     }
 
     @Test
