@@ -13,7 +13,7 @@
 ./gradlew compileKotlin distZip 
 ```
 
-##To run:
+## To run:
 
 First unzip the compiled dist
 ```
