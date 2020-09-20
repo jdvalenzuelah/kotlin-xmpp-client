@@ -6,7 +6,7 @@
 - JRE 1.8
 - Kotlin SDK 1.3+
 
-##To compile dist:
+## To compile dist:
 
 **from main folder**
 ```
