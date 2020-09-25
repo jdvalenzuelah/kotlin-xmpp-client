@@ -42,27 +42,27 @@ class Chat(private val conn: Connection) {
         fun update() {
             accountManager = AccountManager.getInstance(conn)
             chatManager = ChatManager.getInstanceFor(conn)
-            roster = Roster.getInstanceFor(conn)
+            roster = Roster.getInstanceFor(conn).also { it.addRosterListener(rosterListenerManager) }
             userSearch = UserSearchManager(conn)
             fileTransferManager = FileTransferManager.getInstanceFor(conn)
         }
     }
 
-    private val rosterListenerManager = object : RosterListener {
+    private var rosterListenerManager: RosterListener = object : RosterListener {
         override fun entriesAdded(addresses: MutableCollection<Jid>?) {
-            TODO("Not yet implemented")
+           Logger.info(addresses)
         }
 
         override fun entriesDeleted(addresses: MutableCollection<Jid>?) {
-            TODO("Not yet implemented")
+            Logger.info(addresses)
         }
 
         override fun entriesUpdated(addresses: MutableCollection<Jid>?) {
-            TODO("Not yet implemented")
+            Logger.info(addresses)
         }
 
         override fun presenceChanged(presence: Presence?) {
-            TODO("Not yet implemented")
+            Logger.info(presence)
         }
     }
 
@@ -78,6 +78,11 @@ class Chat(private val conn: Connection) {
 
         if(conn.configuration.securityMode == SecurityMode.disabled)
             disableSecureMode()
+    }
+
+    fun updateRosterListener(new: RosterListener) {
+        rosterListenerManager = new
+        managers.update()
     }
 
     private fun toggleLoggedIn() {

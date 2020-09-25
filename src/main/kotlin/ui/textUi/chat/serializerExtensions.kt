@@ -1,5 +1,6 @@
 package ui.textUi.chat
 
+import chat.core.management.models.Contact
 import chat.core.management.models.RegisteredUser
 
 private class TableGenerator(header: List<String>) {
@@ -66,13 +67,14 @@ private class TableGenerator(header: List<String>) {
 
     companion object {
         fun withHeader(vararg cols: String) = TableGenerator(cols.toList())
+        fun withHeader(cols: List<String>) = TableGenerator(cols)
     }
 }
 
-fun List<RegisteredUser>.asUnicodeTable(): String {
-    val generator = TableGenerator.withHeader("Nombre de usuario", "Nombre", " Email")
+fun <T> List<T>.asUnicodeTable(vararg header: String, selector: (T) -> List<String>): String {
+    val generator = TableGenerator.withHeader(header.toList())
     this.forEach {
-        generator.addRow(it.username, it.name ?: "", it.email ?: "")
+        generator.addRow(selector(it))
     }
     return generator.render()
 }

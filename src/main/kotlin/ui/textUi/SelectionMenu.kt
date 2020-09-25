@@ -39,7 +39,7 @@ class SelectionMenu(
             val selection = readLine() ?: continue
             if(validateSelectionInput(selection)){
                 val option = options[selection.toInt() - 1]
-                option()
+                option.execute(selection.toInt() - 1)
                 if(option.final)
                     stop()
             }
@@ -48,7 +48,7 @@ class SelectionMenu(
         }
     }
 
-    override operator fun invoke() = start()
+    override fun execute(id: Int) = start()
 
     @MenuDsl
     class MenuBuilder {
@@ -76,4 +76,4 @@ class SelectionMenu(
 
 @DslMarker private annotation class MenuDsl
 
-fun menu(init: SelectionMenu.MenuBuilder.() -> Unit) = SelectionMenu.MenuBuilder().apply(init).build()
+fun  menu(init: SelectionMenu.MenuBuilder.() -> Unit) = SelectionMenu.MenuBuilder().apply(init).build()

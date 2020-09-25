@@ -1,8 +1,9 @@
 package ui.textUi
 
-data class Option(val label: String, override val final: Boolean = false, val action: () -> Unit): IMenuOption {
+data class Option(val label: String, override val final: Boolean = false, val action: (Int) -> Unit): IMenuOption {
+
     override fun render(): String  = label
 
-    override operator fun invoke() = action()
-}
+    override fun execute(id: Int) = action(id)
 
+}

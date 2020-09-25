@@ -10,9 +10,9 @@ import com.xenomachina.argparser.mainBody
 import ui.textUi.chat.ChatUI
 
 data class Args(val parser: ArgParser) {
-    val domain by parser.storing("--domain", help = "Chat server domain")
+    val domain by parser.storing("--domain", help = "Chat server domain").default("redes2020.xyz")
 
-    val host by parser.storing("--host", help = "Chat server host")
+    val host by parser.storing("--host", help = "Chat server host").default("redes2020.xyz")
 
     val secureMode by parser.mapping(
         "--secure" to SecurityMode.required,
