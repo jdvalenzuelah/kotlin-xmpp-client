@@ -7,6 +7,7 @@ import org.jivesoftware.smack.XMPPException
 import org.jivesoftware.smack.chat2.Chat
 import org.jivesoftware.smack.chat2.ChatManager
 import org.jivesoftware.smack.chat2.IncomingChatMessageListener
+import org.jivesoftware.smack.packet.Message
 import org.jivesoftware.smack.packet.Presence
 import org.jivesoftware.smack.packet.Stanza
 import org.jivesoftware.smack.packet.StanzaError
@@ -15,6 +16,8 @@ import org.jivesoftware.smack.roster.RosterListener
 import org.jivesoftware.smack.sasl.SASLErrorException
 import org.jivesoftware.smackx.filetransfer.FileTransferManager
 import org.jivesoftware.smackx.iqregister.AccountManager
+import org.jivesoftware.smackx.muc.MultiUserChat
+import org.jivesoftware.smackx.muc.MultiUserChatManager
 import org.jivesoftware.smackx.search.ReportedData
 import org.jivesoftware.smackx.search.UserSearchManager
 import org.jivesoftware.smackx.xdata.Form
@@ -24,6 +27,7 @@ import org.jxmpp.jid.EntityFullJid
 import org.jxmpp.jid.Jid
 import org.jxmpp.jid.impl.JidCreate
 import org.jxmpp.jid.parts.Localpart
+import org.jxmpp.jid.parts.Resourcepart
 import org.jxmpp.util.XmppStringUtils
 import org.pmw.tinylog.Logger
 import java.io.File
@@ -32,12 +36,15 @@ class Chat(private val conn: Connection) {
 
     private var loggedIn: Boolean = false
 
+    private var userName: String = ""
+
     private val managers = object {
         var accountManager = AccountManager.getInstance(conn)
         var chatManager = ChatManager.getInstanceFor(conn)
         var roster = Roster.getInstanceFor(conn)
         var userSearch = UserSearchManager(conn)
         var fileTransferManager = FileTransferManager.getInstanceFor(conn)
+        var multiUserManager = MultiUserChatManager.getInstanceFor(conn)
 
         fun update() {
             accountManager = AccountManager.getInstance(conn)
@@ -45,6 +52,7 @@ class Chat(private val conn: Connection) {
             roster = Roster.getInstanceFor(conn).also { it.addRosterListener(rosterListenerManager) }
             userSearch = UserSearchManager(conn)
             fileTransferManager = FileTransferManager.getInstanceFor(conn)
+            multiUserManager = MultiUserChatManager.getInstanceFor(conn)
         }
     }
 
@@ -114,7 +122,7 @@ class Chat(private val conn: Connection) {
         sendStanza(p)
     }
 
-    private fun sendPresence(type: Presence.Type, priority: Int, status: String, mode: Presence.Mode) =
+    fun sendPresence(type: Presence.Type, priority: Int, status: String, mode: Presence.Mode) =
         sendStanza(Presence(type, status, priority, mode))
 
     private fun subscribe(to: BareJid) = sendPresence(Presence.Type.subscribe) {
@@ -151,6 +159,7 @@ class Chat(private val conn: Connection) {
         tryLogin {
             conn.login(username, password)
             toggleLoggedIn()
+            userName = username
             managers.update()
             available()
         }
@@ -271,6 +280,38 @@ class Chat(private val conn: Connection) {
         return managers.chatManager.chatWith(jid).also {
             managers.chatManager.addIncomingListener(IncomingChatMessageListener(handler))
         }
+    }
+
+    fun chatGroup(roomName: String, handler: (Message, MultiUserChat) -> Unit): MultiUserChat {
+
+        val rn = if(roomName.endsWith("@conference.redes2020.xyz")) roomName else "$roomName@conference.redes2020.xyz"
+
+        val muc = managers.multiUserManager.getMultiUserChat(JidCreate.entityBareFrom(rn))
+
+        muc.addMessageListener { msg ->
+            handler(msg, muc)
+        }
+
+        muc.create(Resourcepart.from(userName))
+            .makeInstant()
+
+        return muc
+
+    }
+
+    fun joinChatGroup(roomName: String, handler: (Message, MultiUserChat) -> Unit): MultiUserChat {
+
+        val rn = if(roomName.endsWith("@conference.redes2020.xyz")) roomName else "$roomName@conference.redes2020.xyz"
+
+        val muc = managers.multiUserManager.getMultiUserChat(JidCreate.entityBareFrom(rn))
+
+        muc.addMessageListener { msg ->
+            handler(msg, muc)
+        }
+
+        muc.join(Resourcepart.from(userName))
+
+        return muc
     }
 
     fun disconnect() {

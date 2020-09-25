@@ -1,5 +1,6 @@
 package chat.core.management
 
+import org.jivesoftware.smack.packet.Presence
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assertions.*
 import org.jxmpp.jid.impl.JidCreate
@@ -25,6 +26,7 @@ class ChatIntegTest {
 
     private val username = UUID.randomUUID().toString()
     private val password = UUID.randomUUID().toString()
+    private val roomName = UUID.randomUUID().toString()
 
     @Test
     @Order(1)
@@ -76,29 +78,35 @@ class ChatIntegTest {
     @Test
     @Order(8)
     fun `should be able to create a new room`() {
-        TODO("Not yet implemented")
+        chat.chatGroup(roomName) { _, _ -> /* Empty handler */ }
     }
 
     @Test
     @Order(9)
-    fun `should send presence message`() {
-        TODO("Not yet implemented")
+    fun `should be able to join an existing room`() {
+        chat.joinChatGroup("testG"){ _, _ -> /* Empty handler */ }
     }
 
     @Test
     @Order(10)
+    fun `should send presence message`() {
+        chat.sendPresence(Presence.Type.available, 1, "Disponible", Presence.Mode.available)
+    }
+
+    @Test
+    @Order(11)
     fun `should send files to user chat`() {
         TODO("Not yet implemented")
     }
 
     @Test
-    @Order(11)
+    @Order(12)
     fun `should send files to group chat`() {
         TODO("Not yet implemented")
     }
 
     @Test
-    @Order(12)
+    @Order(13)
     fun `should delete logged in account`() {
         assertTrue(chat.deleteAccount())
     }

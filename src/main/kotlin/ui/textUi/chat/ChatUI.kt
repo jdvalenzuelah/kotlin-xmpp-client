@@ -5,6 +5,7 @@ import chat.core.management.MessageHandler
 import org.jivesoftware.smack.packet.Message
 import org.jivesoftware.smack.packet.Presence
 import org.jivesoftware.smack.roster.RosterListener
+import org.jivesoftware.smackx.muc.MultiUserChat
 import org.jxmpp.jid.EntityBareJid
 import org.jxmpp.jid.Jid
 import org.pmw.tinylog.Logger
@@ -19,27 +20,44 @@ class ChatUI(chat: Chat) {
         }
     }
 
+    data class RoomMsgWrapper(val message: Message, val mcu: MultiUserChat) {
+        fun render(): String {
+            return "De: ${message.from}\nMensaje: ${message.body}"
+        }
+    }
+
+    data class Roster(val jid: Jid, val presence: Presence?)
+
     private val messagePool = mutableListOf<ChatWrapper>()
-    private val rosterPool = mutableListOf<Jid>()
+    private val roomMessagePool = mutableListOf<RoomMsgWrapper>()
+    private val rosterPool = mutableListOf<Roster>()
 
     private val rosterListener = object : RosterListener {
         override fun entriesAdded(addresses: MutableCollection<Jid>?) {
-            if(addresses != null)
-                rosterPool.addAll(addresses)
+            addresses
+                ?.map { Roster(it, null) }
+                ?.also { rosterPool.addAll(it) }
         }
 
         override fun entriesDeleted(addresses: MutableCollection<Jid>?) {
             if(addresses != null)
-                rosterPool.removeAll(addresses)
+                rosterPool.removeIf { it.jid in addresses }
         }
 
         override fun entriesUpdated(addresses: MutableCollection<Jid>?) {
-            if(addresses != null)
-                rosterPool.removeAll(addresses)
+            Logger.warn("Not sure what to do with updates!")
         }
 
         override fun presenceChanged(presence: Presence?) {
-            TODO("Not yet implemented")
+            println(presence)
+            if(presence == null)
+                return
+            val foundIndex = rosterPool.indexOfFirst { it.jid.localpartOrNull == presence.from.localpartOrNull }
+
+            if(foundIndex != -1) {
+                rosterPool[foundIndex] = rosterPool[foundIndex].copy(presence = presence)
+            }
+
         }
     }
 
@@ -83,6 +101,7 @@ class ChatUI(chat: Chat) {
                     listOf(it.username, it.name ?: "", it.email ?: "")
                 }
                 println(table)
+                enterToContinue()
                 true
             }
         }
@@ -93,6 +112,7 @@ class ChatUI(chat: Chat) {
                     listOf(it.contactName, it.jid.toString())
                 }
                 println(table)
+                enterToContinue()
                 true
             }
         }
@@ -117,18 +137,118 @@ class ChatUI(chat: Chat) {
 
         +Option("Ver notificaciones:") {
             tryExecuteAndLogError("No se pudo mostrar notificaciones") {
-                println("Mensajes nuevos: ")
-                val renderedPool = messagePool
-                    .mapIndexed { index, chatWrapper -> listOf("${index + 1}", chatWrapper.jid.toString()) }
-                    .asUnicodeTable("No.", "De"){ it }
-                println(renderedPool)
+                if(messagePool.isNotEmpty()) {
+                    println("Mensajes nuevos: ")
+                    val renderedPool = messagePool
+                        .mapIndexed { index, chatWrapper -> listOf("${index + 1}", chatWrapper.jid.toString()) }
+                        .asUnicodeTable("No.", "De"){ it }
+                    println(renderedPool)
+                    menu {
+                        help { "Ingrese notificacion a expandir: " }
+                        +Option("", final = true) { pos ->
+                            val message = messagePool.removeAt(pos)
+                            println(message.render())
+                            val res = getNonEmptyString("Desea continuar? y/N")
+                            if(res.toLowerCase() in listOf("yes", "y")) {
+                                val reply = getNonEmptyString("Ingrese mensage: ")
+                                message.chat.send(reply)
+                            }
+                        }
+                    }.start()
+                } else {
+                    println("No hay notificaciones a mostrar!")
+                    enterToContinue()
+                }
+                true
+            }
+        }
+
+        +Option("Ver estado de usuarios."){
+            tryExecuteAndLogError("Error inesperado, intente de nuevo mas tarde!"){
+                val renderedRoster = rosterPool
+                    .asUnicodeTable("Usuario.", "Tipo", "Estado"){
+                        listOf(it.jid.toString(), it.presence?.type?.toString() ?: "N/A", it.presence?.status ?: "N/A")
+                    }
+                println(renderedRoster)
+                enterToContinue()
+                true
+            }
+        }
+
+        +Option("Cambiar estado") {
+            tryExecuteAndLogError("Error inesperado intente de nuevo mas tarde!") {
                 menu {
-                    help { "Ingrese notificacion a expandir: " }
-                    +Option("", final = true) { pos ->
-                        val message = messagePool.removeAt(pos)
-                        println(message.render())
+                    help { "Ingrese una opcion: " }
+                    +Option("Disponible", final = true) {
+                        chat.sendPresence(Presence.Type.available, 50, "Available", Presence.Mode.available)
+                    }
+
+                    +Option("No Disponible", final = true) {
+                        chat.sendPresence(Presence.Type.unavailable, 50, "Available", Presence.Mode.away)
                     }
                 }.start()
+                true
+            }
+        }
+
+        +Option("Crear nueva sala.") {
+            tryExecuteAndLogError("Error inesperado, intente de nuevo mas tarde") {
+                val rname = getNonEmptyString("Ingrese el nombre de la sala: ")
+                val muc = chat.chatGroup(rname) { msg, mcu ->
+                    roomMessagePool.add(RoomMsgWrapper(msg, mcu))
+                }
+                val cont = getNonEmptyString("Enviar mensaje? y/N")
+
+                if(cont.toLowerCase() in listOf("y", "yes")) {
+                    val msg = getNonEmptyString("Ingrese mensaje a enviar: ")
+                    muc.sendMessage(msg)
+                }
+
+                true
+            }
+        }
+
+        +Option("Entrar a una sala.") {
+            tryExecuteAndLogError("Error inesperado, intente de nuevo mas tarde") {
+                val rname = getNonEmptyString("Ingrese el nombre de la sala: ")
+                val muc = chat.joinChatGroup(rname) { msg, mcu ->
+                    roomMessagePool.add(RoomMsgWrapper(msg, mcu))
+                }
+
+                val cont = getNonEmptyString("Enviar mensaje? y/N")
+
+                if(cont.toLowerCase() in listOf("y", "yes")) {
+                    val msg = getNonEmptyString("Ingrese mensaje a enviar: ")
+                    muc.sendMessage(msg)
+                }
+                true
+            }
+        }
+
+        +Option("Ver notificaciones grupales:") {
+            tryExecuteAndLogError("No se pudo mostrar notificaciones") {
+                if(roomMessagePool.isNotEmpty()) {
+                    println("Mensajes nuevos: ")
+                    val renderedPool = roomMessagePool
+                        .mapIndexed { index, chatWrapper -> listOf("${index + 1}", chatWrapper.message.from.toString()) }
+                        .asUnicodeTable("No.", "De"){ it }
+                    println(renderedPool)
+                    menu {
+                        help { "Ingrese notificacion a expandir: " }
+                        +Option("", final = true) { pos ->
+                            val message = roomMessagePool.removeAt(pos)
+                            println(message.render())
+                            val res = getNonEmptyString("Desea continuar? y/N")
+                            if(res.toLowerCase() in listOf("yes", "y")) {
+                                val reply = getNonEmptyString("Ingrese mensage: ")
+                                message.mcu.sendMessage(reply)
+                            }
+                        }
+                    }.start()
+                } else {
+                    println("No hay notificaciones a mostrar!")
+                    enterToContinue()
+                }
                 true
             }
         }
@@ -195,6 +315,11 @@ class ChatUI(chat: Chat) {
             println(msg)
             readLine()
         }
+    }
+
+    private fun enterToContinue() {
+        println("Presione enter para continuar")
+        readLine()
     }
 
     fun start() {
